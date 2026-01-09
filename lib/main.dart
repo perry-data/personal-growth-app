@@ -17,6 +17,14 @@ final supabaseProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
 });
 
+final authSessionProvider = StreamProvider<Session?>((ref) async* {
+  final supabase = ref.watch(supabaseProvider);
+  yield supabase.auth.currentSession;
+  await for (final state in supabase.auth.onAuthStateChange) {
+    yield state.session;
+  }
+});
+
 String ymd(DateTime dt) {
   final y = dt.year.toString().padLeft(4, '0');
   final m = dt.month.toString().padLeft(2, '0');
@@ -66,11 +74,12 @@ class AuthGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final supabase = ref.watch(supabaseProvider);
-    final session = supabase.auth.currentSession;
-
-    if (session == null) return const LoginPage();
-    return const HomePage();
+    final asyncSession = ref.watch(authSessionProvider);
+    return asyncSession.when(
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(body: Center(child: Text('认证状态监听失败：$e'))),
+      data: (session) => session == null ? const LoginPage() : const HomePage(),
+    );
   }
 }
 
@@ -103,6 +112,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('注册失败：${e.message}')));
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('注册失败：$e')));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -116,10 +129,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         email: _email.text.trim(),
         password: _password.text,
       );
-      if (mounted) setState(() {}); // 触发 AuthGate rebuild
     } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('登录失败：${e.message}')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('登录失败：$e')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -209,13 +225,17 @@ class HomePage extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () async {
-              await supabase.auth.signOut();
-              // 退回登录页
-              if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                  (_) => false,
-                );
+              try {
+                await supabase.auth.signOut();
+              } on AuthException catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text('退出失败：${e.message}')));
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('退出失败：$e')));
+                }
               }
             },
             child: const Text('退出'),
