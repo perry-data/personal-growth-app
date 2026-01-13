@@ -5,6 +5,20 @@ $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 Set-Location $root
 
 if ([string]::IsNullOrWhiteSpace($env:SUPABASE_URL)) {
+  $env:SUPABASE_URL = [Environment]::GetEnvironmentVariable('SUPABASE_URL', 'User')
+  if ([string]::IsNullOrWhiteSpace($env:SUPABASE_URL)) {
+    $env:SUPABASE_URL = [Environment]::GetEnvironmentVariable('SUPABASE_URL', 'Machine')
+  }
+}
+
+if ([string]::IsNullOrWhiteSpace($env:SUPABASE_ANON_KEY)) {
+  $env:SUPABASE_ANON_KEY = [Environment]::GetEnvironmentVariable('SUPABASE_ANON_KEY', 'User')
+  if ([string]::IsNullOrWhiteSpace($env:SUPABASE_ANON_KEY)) {
+    $env:SUPABASE_ANON_KEY = [Environment]::GetEnvironmentVariable('SUPABASE_ANON_KEY', 'Machine')
+  }
+}
+
+if ([string]::IsNullOrWhiteSpace($env:SUPABASE_URL)) {
   Write-Host 'Missing SUPABASE_URL.'
   Write-Host 'Temporary: $env:SUPABASE_URL="https://xxxx.supabase.co"'
   Write-Host 'Persist:   setx SUPABASE_URL "https://xxxx.supabase.co"'
